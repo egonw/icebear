@@ -18,11 +18,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.eclipse.core.runtime.CoreException;
+
 import io.github.egonw.bacting.IBactingManager;
 import net.bioclipse.cdk.domain.ICDKMolecule;
 import net.bioclipse.core.business.BioclipseException;
 import net.bioclipse.core.domain.IMolecule;
 import net.bioclipse.core.domain.IMolecule.Property;
+import net.bioclipse.core.domain.IStringMatrix;
+import net.bioclipse.icebear.business.Entry;
+import net.bioclipse.icebear.extractors.INextURIExtractor;
+import net.bioclipse.icebear.extractors.IPropertyExtractor;
+import net.bioclipse.icebear.extractors.links.OwlEquivalentClassExtractor;
+import net.bioclipse.icebear.extractors.links.OwlSameAsExtractor;
+import net.bioclipse.icebear.extractors.links.SkosExactMatchExtractor;
 import net.bioclipse.rdf.business.IRDFStore;
 
 /**
@@ -41,6 +50,16 @@ public class IcebearManager implements IBactingManager {
 	  put("Accept", "application/rdf+xml"); // Both Accept and Content-Type are needed for PubChem 
 	}};
 
+	private List<IPropertyExtractor> extractors = new ArrayList<IPropertyExtractor>() {
+		private static final long serialVersionUID = 2825983879781792266L; {
+	}};
+	private List<INextURIExtractor> spiders = new ArrayList<INextURIExtractor>() {
+		private static final long serialVersionUID = 7089854109617759948L; {
+		add(new OwlSameAsExtractor());
+		add(new OwlEquivalentClassExtractor());
+		add(new SkosExactMatchExtractor());
+	}};
+
 	/**
      * Creates a new IcebearManager.
      *
@@ -52,17 +71,45 @@ public class IcebearManager implements IBactingManager {
 		this.rdf = new RDFManager(this.workspaceRoot);
 	}
 
-	public void findInfo(IMolecule mol) throws BioclipseException {
+	public List<IRDFStore> findInfo(IMolecule mol) throws BioclipseException {
     	ICDKMolecule cdkMol = cdk.asCDKMolecule(mol);
-    	String inchi = cdkMol.getInChI(Property.USE_CACHED_OR_CALCULATED);
+    	String inchikey = cdkMol.getInChIKey(Property.USE_CACHED_OR_CALCULATED);
     	IcebearWorkload workload = new IcebearWorkload();
-    	workload.addNewURI("http://rdf.openmolecules.net/?" + inchi);
-    	inchi = inchi.replace("=1S/", "=1/");
-    	workload.addNewURI("http://rdf.openmolecules.net/?" + inchi);
+    	String hasMoleculeByInChI =
+   			"PREFIX wdt: <http://www.wikidata.org/prop/direct/>"
+				+ "SELECT ?compound WHERE {"
+				+ "  ?compound wdt:P235  \"" + inchikey + "\" ."
+				+ "}";
+        IStringMatrix results = rdf.sparqlRemote(
+        	"https://query.wikidata.org/sparql", hasMoleculeByInChI
+        );
+        if (results.getRowCount() == 0)
+        	throw new BioclipseException("No molecule in Wikidata with the InChIKey: " + inchikey);
+        if (results.getRowCount() > 1)
+        	throw new BioclipseException("Too many molecules in Wikidata with the InChIKey: " + inchikey);
+        String entityID = results.get(1, "compound");
+        if (entityID == null || entityID.length() == 0)
+        	throw new BioclipseException("No Wikidata entity found for the molecule with the InChIKey: " + inchikey);
+    	workload.addNewURI(entityID);
+
+    	List<IRDFStore> stores = new ArrayList<IRDFStore>();
     	while (workload.hasMoreWork()) {
-    		findInfoForOneURI(workload);
+    		stores.add(findInfoForOneURI(workload));
     	}
+    	return stores;
 	}
+
+    public List<Entry> getProperties(IRDFStore store) throws BioclipseException, CoreException {
+    	String resource = rdf.getForPredicate(store,
+    		"http://www.bioclipse.org/PrimaryObject",
+			"http://www.bioclipse.org/hasURI").get(0);
+    	
+		List<Entry> props = new ArrayList<Entry>();
+		for (IPropertyExtractor extractor : extractors) {
+			props.addAll(extractor.extractProperties(store, resource));
+		}
+		return props;
+    }
 
     private IRDFStore findInfoForOneURI(IcebearWorkload workload) {
     	IRDFStore store = rdf.createInMemoryStore();
@@ -75,11 +122,11 @@ public class IcebearManager implements IBactingManager {
 			);
 			rdf.importURL(store, nextURIString, extraHeaders);
 			System.out.println(rdf.asTurtle(store));
-//			for (INextURIExtractor spider : spiders) {
-//				for (String uri : spider.extractURIs(store, nextURI.toString())) {
-//					workload.addNewURI(uri);
-//				}
-//			}
+			for (INextURIExtractor spider : spiders) {
+				for (String uri : spider.extractURIs(store, nextURI.toString())) {
+					workload.addNewURI(uri);
+				}
+			}
 		} catch (Exception exception) {
 			System.out.println("Error while downloading " + nextURIString + ": " + exception.getMessage());
 		}
