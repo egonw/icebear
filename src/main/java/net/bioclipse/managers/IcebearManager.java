@@ -7,7 +7,7 @@
  *
  * Contact: http://www.bioclipse.net/
  */
-package net.bioclipse.manager;
+package net.bioclipse.managers;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -23,8 +23,6 @@ import net.bioclipse.cdk.domain.ICDKMolecule;
 import net.bioclipse.core.business.BioclipseException;
 import net.bioclipse.core.domain.IMolecule;
 import net.bioclipse.core.domain.IMolecule.Property;
-import net.bioclipse.managers.CDKManager;
-import net.bioclipse.managers.RDFManager;
 import net.bioclipse.rdf.business.IRDFStore;
 
 /**

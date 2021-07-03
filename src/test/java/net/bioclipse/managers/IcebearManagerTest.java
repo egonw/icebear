@@ -7,7 +7,7 @@
  *
  * Contact: http://www.bioclipse.net/
  */
-package net.bioclipse.manager;
+package net.bioclipse.managers;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
