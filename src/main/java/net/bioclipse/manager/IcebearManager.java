@@ -90,7 +90,7 @@ public class IcebearManager implements IBactingManager {
 
 	@Override
 	public String getManagerName() {
-		return "icebear";
+		return "isbjørn";
 	}
 
 	public List<String> doi() {

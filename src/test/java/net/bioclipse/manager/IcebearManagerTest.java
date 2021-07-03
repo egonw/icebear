@@ -39,7 +39,7 @@ public class IcebearManagerTest {
 
 	@Test
 	public void testManagerName() {
-		assertSame("icebear", icebear.getManagerName());
+		assertSame("isbjørn", icebear.getManagerName());
 	}
 
 }
